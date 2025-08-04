@@ -96,14 +96,18 @@ if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
 if not st.session_state.authenticated:
-    password = st.text_input("Enter password", type="password")
-    if st.button("Login"):
-        if password == st.secrets.get("app_password", "changeme"):
-            st.session_state.authenticated = True
-            st.experimental_rerun()
-        else:
-            st.error("Incorrect password")
+    with st.form("login_form"):
+        password = st.text_input("Enter password", type="password")
+        submitted = st.form_submit_button("Login")
+        
+        if submitted:
+            if password == st.secrets.get("app_password", "changeme"):
+                st.session_state.authenticated = True
+                st.success("✅ Login successful!")
+            else:
+                st.error("Incorrect password")
     st.stop()
+
 
 # Logout
 if st.button("Logout"):
