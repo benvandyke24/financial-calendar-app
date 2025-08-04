@@ -82,21 +82,18 @@ st.set_page_config(layout="wide")
 st.title("📅 Financial Calendar")
 
 manager = FinanceManager()
-
 # Password protection
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
 if not st.session_state.authenticated:
     password = st.text_input("Enter password", type="password")
-
-    # 🔎 DEBUG LINE - Remove after testing
-    st.write("DEBUG password:", st.secrets.get("app_password"))
-
-    if st.button("Login"):
-        if password == st.secrets.get("app_password", "Tibblef15"):
+    login_clicked = st.button("Login")
+    
+    if login_clicked:
+        if password == st.secrets.get("app_password", "changeme"):
             st.session_state.authenticated = True
-            st.rerun()
+            st.success("✅ Login successful!")
         else:
             st.error("Incorrect password")
     st.stop()
