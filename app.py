@@ -83,24 +83,31 @@ st.title("📅 Financial Calendar")
 
 manager = FinanceManager()
 
+# ---------------------------
 # Password protection
+# ---------------------------
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
 if not st.session_state.authenticated:
-    with st.form("login_form"):
-        password = st.text_input("Enter password", type="password")
-        submitted = st.form_submit_button("Login")
-        
-        if submitted:
-            if password == st.secrets.get("app_password", "changeme"):
-                st.session_state.authenticated = True
-                st.success("✅ Login successful!")
-            else:
-                st.error("Incorrect password")
+    password = st.text_input("Enter password", type="password")
+    if st.button("Login"):
+        if password == st.secrets.get("app_password", "changeme"):
+            st.session_state.authenticated = True
+            st.rerun()  # safer rerun
+        else:
+            st.error("Incorrect password")
     st.stop()
 
+# Logout button
+if st.session_state.authenticated:
+    if st.button("🔒 Logout"):
+        st.session_state.authenticated = False
+        st.rerun()
+
+# ---------------------------
 # Navigation
+# ---------------------------
 today = datetime.today()
 if "current_month" not in st.session_state:
     st.session_state.current_month = today.month
@@ -125,17 +132,39 @@ with col3:
 
 st.subheader(f"{calendar.month_name[st.session_state.current_month]} {st.session_state.current_year}")
 
-# Calendar layout
+# ---------------------------
+# Calendar layout with Daily + Weekly Totals
+# ---------------------------
 weeks = calendar.Calendar(firstweekday=6).monthdatescalendar(st.session_state.current_year, st.session_state.current_month)
+
+# Calculate weekly totals
+weekly_totals = []
 for week in weeks:
-    cols = st.columns(7)
+    week_total = 0
+    for day in week:
+        day_data = manager.get_transactions_by_date(day)
+        for _, row in day_data.iterrows():
+            week_total += row["amount"] if row["type"] == "Income" else -row["amount"]
+    weekly_totals.append(week_total)
+
+# Build calendar grid
+for week_index, week in enumerate(weeks):
+    cols = st.columns(8)  # 7 days + weekly total
     for i, day in enumerate(week):
         with cols[i]:
             st.markdown(f"### {day.day}")
             day_data = manager.get_transactions_by_date(day)
+
+            # Daily sum
+            day_total = 0
             for _, row in day_data.iterrows():
                 color = "blue" if row["type"] == "Income" else ("darkgreen" if row["type"] == "Bill" else "red")
                 st.markdown(f"<span style='color:{color}'>{row['description']} ${row['amount']:.2f}</span>", unsafe_allow_html=True)
+                day_total += row["amount"] if row["type"] == "Income" else -row["amount"]
+
+            st.markdown(f"**Daily Total: ${day_total:.2f}**")
+
+            # Add button
             if st.button("➕", key=f"add-{day}"):
                 with st.form(key=f"form-{day}"):
                     ttype = st.selectbox("Type", ["Income", "Expense", "Bill"])
@@ -146,8 +175,15 @@ for week in weeks:
                     if submit:
                         manager.add_transaction(day, ttype, desc, amount, recurring)
                         st.success("Transaction added!")
-                        st.experimental_rerun()
+                        st.rerun()
 
+    # Weekly total column
+    with cols[7]:
+        st.markdown("### Week Total")
+        st.markdown(f"**${weekly_totals[week_index]:.2f}**")
+
+# ---------------------------
 # Monthly total
+# ---------------------------
 month_total = manager.get_monthly_total(st.session_state.current_year, st.session_state.current_month)
 st.subheader(f"Monthly Net: ${month_total:.2f}")
