@@ -112,7 +112,7 @@ if not st.session_state.authenticated:
 # Logout
 if st.button("Logout"):
     st.session_state.authenticated = False
-    st.experimental_rerun()
+    st.rerun()
 
 # Calendar state
 today = datetime.today()
@@ -173,7 +173,7 @@ if st.session_state.selected_day:
             manager.add_transaction(st.session_state.selected_day, ttype, desc, amount, recurring)
             st.success("Transaction added!")
             st.session_state.selected_day = None
-            st.experimental_rerun()
+            st.rerun()
 
 # Monthly total
 month_total = manager.get_monthly_total(st.session_state.current_year, st.session_state.current_month)
