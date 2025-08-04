@@ -89,6 +89,10 @@ if "authenticated" not in st.session_state:
 
 if not st.session_state.authenticated:
     password = st.text_input("Enter password", type="password")
+
+    # 🔎 DEBUG LINE - Remove after testing
+    st.write("DEBUG password:", st.secrets.get("app_password"))
+
     if st.button("Login"):
         if password == st.secrets.get("app_password", "changeme"):
             st.session_state.authenticated = True
