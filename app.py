@@ -94,7 +94,7 @@ if not st.session_state.authenticated:
     st.write("DEBUG password:", st.secrets.get("app_password"))
 
     if st.button("Login"):
-        if password == st.secrets.get("app_password", "changeme"):
+        if password == st.secrets.get("app_password", "Tibblef15"):
             st.session_state.authenticated = True
             st.experimental_rerun()
         else:
