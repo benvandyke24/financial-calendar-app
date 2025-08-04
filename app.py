@@ -133,65 +133,54 @@ with col3:
 st.subheader(f"{calendar.month_name[st.session_state.current_month]} {st.session_state.current_year}")
 
 # ---------------------------
-# Layout: Calendar (left) + Weekly Summary (right)
+# Calendar layout with Daily + Weekly Totals
 # ---------------------------
-left_col, right_col = st.columns([3, 1])
+weeks = calendar.Calendar(firstweekday=6).monthdatescalendar(st.session_state.current_year, st.session_state.current_month)
+
+# Calculate weekly totals
+weekly_totals = []
+for week in weeks:
+    week_total = 0
+    for day in week:
+        day_data = manager.get_transactions_by_date(day)
+        for _, row in day_data.iterrows():
+            week_total += row["amount"] if row["type"] == "Income" else -row["amount"]
+    weekly_totals.append(week_total)
 
 # Build calendar grid
-with left_col:
-    weeks = calendar.Calendar(firstweekday=6).monthdatescalendar(st.session_state.current_year, st.session_state.current_month)
-
-    # Calculate weekly totals
-    weekly_totals = []
-    for week in weeks:
-        week_total = 0
-        for day in week:
+for week_index, week in enumerate(weeks):
+    cols = st.columns(8)  # 7 days + weekly total
+    for i, day in enumerate(week):
+        with cols[i]:
+            st.markdown(f"### {day.day}")
             day_data = manager.get_transactions_by_date(day)
+
+            # Daily sum
+            day_total = 0
             for _, row in day_data.iterrows():
-                week_total += row["amount"] if row["type"] == "Income" else -row["amount"]
-        weekly_totals.append(week_total)
+                color = "blue" if row["type"] == "Income" else ("darkgreen" if row["type"] == "Bill" else "red")
+                st.markdown(f"<span style='color:{color}'>{row['description']} ${row['amount']:.2f}</span>", unsafe_allow_html=True)
+                day_total += row["amount"] if row["type"] == "Income" else -row["amount"]
 
-    for week_index, week in enumerate(weeks):
-        cols = st.columns(8)  # 7 days + weekly total
-        for i, day in enumerate(week):
-            with cols[i]:
-                st.markdown(f"### {day.day}")
-                day_data = manager.get_transactions_by_date(day)
+            st.markdown(f"**Daily Total: ${day_total:.2f}**")
 
-                # Daily sum
-                day_total = 0
-                for _, row in day_data.iterrows():
-                    color = "blue" if row["type"] == "Income" else ("darkgreen" if row["type"] == "Bill" else "red")
-                    st.markdown(f"<span style='color:{color}'>{row['description']} ${row['amount']:.2f}</span>", unsafe_allow_html=True)
-                    day_total += row["amount"] if row["type"] == "Income" else -row["amount"]
+            # Add button
+            if st.button("➕", key=f"add-{day}"):
+                with st.form(key=f"form-{day}"):
+                    ttype = st.selectbox("Type", ["Income", "Expense", "Bill"])
+                    desc = st.text_input("Description")
+                    amount = st.number_input("Amount", min_value=0.0, step=0.01)
+                    recurring = st.checkbox("Recurring (Bills only)")
+                    submit = st.form_submit_button("Add")
+                    if submit:
+                        manager.add_transaction(day, ttype, desc, amount, recurring)
+                        st.success("Transaction added!")
+                        st.rerun()
 
-                st.markdown(f"**Daily Total: ${day_total:.2f}**")
-
-                # Add button
-                if st.button("➕", key=f"add-{day}"):
-                    with st.form(key=f"form-{day}"):
-                        ttype = st.selectbox("Type", ["Income", "Expense", "Bill"])
-                        desc = st.text_input("Description")
-                        amount = st.number_input("Amount", min_value=0.0, step=0.01)
-                        recurring = st.checkbox("Recurring (Bills only)")
-                        submit = st.form_submit_button("Add")
-                        if submit:
-                            manager.add_transaction(day, ttype, desc, amount, recurring)
-                            st.success("Transaction added!")
-                            st.rerun()
-
-        # Weekly total column
-        with cols[7]:
-            st.markdown("### Week Total")
-            st.markdown(f"**${weekly_totals[week_index]:.2f}**")
-
-# ---------------------------
-# Weekly summary panel (right)
-# ---------------------------
-with right_col:
-    st.markdown("## 📊 Weekly Summary")
-    for i, total in enumerate(weekly_totals):
-        st.markdown(f"**Week {i+1}: ${total:.2f}**")
+    # Weekly total column
+    with cols[7]:
+        st.markdown("### Week Total")
+        st.markdown(f"**${weekly_totals[week_index]:.2f}**")
 
 # ---------------------------
 # Monthly total
