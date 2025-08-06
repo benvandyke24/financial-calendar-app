@@ -4,40 +4,58 @@ import calendar
 from datetime import datetime
 import uuid
 import gspread
+from gspread.exceptions import SpreadsheetNotFound
 from oauth2client.service_account import ServiceAccountCredentials
 
 # ---------------------------
-# Google Sheets Integration
+# Google Sheets Setup
 # ---------------------------
 
 HEADERS = ["date", "type", "description", "amount", "recurring_id", "recurring_active"]
 
 def connect_to_google_sheet(sheet_name="Financial_Calendar_Data"):
+    """Connects to Google Sheets, creates the spreadsheet and headers if needed."""
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
     creds = ServiceAccountCredentials.from_json_keyfile_dict(
         st.secrets["gcp_service_account"], scope
     )
     client = gspread.authorize(creds)
-    sheet = client.open(sheet_name).sheet1
+
+    # Create sheet if it doesn't exist
+    try:
+        spreadsheet = client.open(sheet_name)
+    except SpreadsheetNotFound:
+        spreadsheet = client.create(sheet_name)
+        spreadsheet.share(st.secrets["gcp_service_account"]["client_email"], perm_type="user", role="writer")
+
+    sheet = spreadsheet.sheet1
 
     # Ensure headers exist
-    existing_values = sheet.get_all_values()
-    if not existing_values:  
+    values = sheet.get_all_values()
+    if not values:
         sheet.append_row(HEADERS)
-    else:
-        # If first row isn't headers, set them
-        if existing_values[0] != HEADERS:
-            sheet.delete_rows(1)  # remove wrong headers
-            sheet.insert_row(HEADERS, 1)
-    
+    elif values[0] != HEADERS:
+        sheet.clear()
+        sheet.append_row(HEADERS)
+
     return sheet
 
 def load_data():
+    """Loads data safely, returns empty DataFrame if no data."""
     sheet = connect_to_google_sheet()
-    data = sheet.get_all_records()
-    return pd.DataFrame(data)
+    values = sheet.get_all_values()
+    
+    if len(values) <= 1:  # Only headers or empty
+        return pd.DataFrame(columns=HEADERS)
+    
+    df = pd.DataFrame(values[1:], columns=values[0])
+    
+    # Convert amount to float
+    df["amount"] = pd.to_numeric(df["amount"], errors="coerce").fillna(0.0)
+    return df
 
 def save_data(new_entry):
+    """Appends a new transaction to the sheet."""
     sheet = connect_to_google_sheet()
     sheet.append_row([
         new_entry["date"],
@@ -54,12 +72,7 @@ def save_data(new_entry):
 
 class FinanceManager:
     def __init__(self):
-        try:
-            self.data = load_data()
-            if self.data.empty:
-                self.data = pd.DataFrame(columns=HEADERS)
-        except Exception:
-            self.data = pd.DataFrame(columns=HEADERS)
+        self.data = load_data()
 
     def save(self, new_entry):
         save_data(new_entry)
@@ -70,7 +83,7 @@ class FinanceManager:
             "date": pd.to_datetime(date).strftime('%Y-%m-%d'),
             "type": ttype,
             "description": desc,
-            "amount": amount,
+            "amount": float(amount),
             "recurring_id": None,
             "recurring_active": True
         }
@@ -90,9 +103,7 @@ class FinanceManager:
         if data.empty:
             return 0
         data["date"] = pd.to_datetime(data["date"], errors='coerce')
-        month_data = data[
-            (data["date"].dt.year == year) & (data["date"].dt.month == month)
-        ]
+        month_data = data[(data["date"].dt.year == year) & (data["date"].dt.month == month)]
         return sum(row["amount"] if row["type"] == "Income" else -row["amount"] for _, row in month_data.iterrows())
 
     def get_weekly_total(self, week_dates):
