@@ -208,7 +208,7 @@ for week in weeks:
             # Handle button click with session state
             if f"select-{day}" not in st.session_state:
                 st.session_state[f"select-{day}"] = False
-            if st.query_params.().get("select") == [str(day)]:
+            if st.query_params().get("select") == [str(day)]:
                 
                 st.session_state.selected_day = str(day)
 
