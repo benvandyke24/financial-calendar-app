@@ -24,10 +24,17 @@ def load_data():
     data = sheet.get_all_records()
     return pd.DataFrame(data)
 
-def save_data(df):
+def save_data(new_entry):
     sheet = connect_to_google_sheet()
-    sheet.clear()
-    sheet.update([df.columns.values.tolist()] + df.values.tolist())
+    sheet.append_row([
+        new_entry["date"],
+        new_entry["type"],
+        new_entry["description"],
+        new_entry["amount"],
+        new_entry["recurring_id"],
+        new_entry["recurring_active"]
+    ])
+
 
 # ---------------------------
 # FinanceManager with Google Sheets
@@ -42,8 +49,8 @@ class FinanceManager:
         except Exception:
             self.data = pd.DataFrame(columns=["date", "type", "description", "amount", "recurring_id", "recurring_active"])
 
-    def save(self):
-        save_data(self.data)
+    def save(self, new_entry):
+        save_data(new_entry)
 
     def add_transaction(self, date, ttype, desc, amount, recurring=False):
         new_entry = {
@@ -57,7 +64,8 @@ class FinanceManager:
         if recurring and ttype == "Bill":
             new_entry["recurring_id"] = f"{desc}-{uuid.uuid4()}"
         self.data = pd.concat([self.data, pd.DataFrame([new_entry])], ignore_index=True)
-        self.save()
+        self.save(new_entry)
+
 
     def get_transactions_by_date(self, date):
         date = pd.to_datetime(date).date()
