@@ -34,6 +34,22 @@ def save_data(new_entry):
         new_entry["recurring_id"],
         new_entry["recurring_active"]
     ])
+    
+def add_transaction(self, date, ttype, desc, amount, recurring=False):
+    new_entry = {
+        "date": pd.to_datetime(date).strftime('%Y-%m-%d'),
+        "type": ttype,
+        "description": desc,
+        "amount": amount,
+        "recurring_id": None,
+        "recurring_active": True
+    }
+    if recurring and ttype == "Bill":
+        new_entry["recurring_id"] = f"{desc}-{uuid.uuid4()}"
+    
+    self.save(new_entry)
+    # Refresh in-memory data to include the new transaction
+    self.data = load_data()
 
 
 # ---------------------------
