@@ -50,6 +50,13 @@ def add_transaction(self, date, ttype, desc, amount, recurring=False):
     self.save(new_entry)
     # Refresh in-memory data to include the new transaction
     self.data = load_data()
+    
+def get_transactions_by_date(self, date):
+    # Reload data each time to stay in sync with sheet
+    self.data = load_data()
+    date = pd.to_datetime(date).date()
+    self.data["date"] = pd.to_datetime(self.data["date"], errors='coerce')
+    return self.data[self.data["date"].dt.date == date]
 
 
 # ---------------------------
