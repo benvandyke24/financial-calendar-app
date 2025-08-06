@@ -34,33 +34,9 @@ def save_data(new_entry):
         new_entry["recurring_id"],
         new_entry["recurring_active"]
     ])
-    
-def add_transaction(self, date, ttype, desc, amount, recurring=False):
-    new_entry = {
-        "date": pd.to_datetime(date).strftime('%Y-%m-%d'),
-        "type": ttype,
-        "description": desc,
-        "amount": amount,
-        "recurring_id": None,
-        "recurring_active": True
-    }
-    if recurring and ttype == "Bill":
-        new_entry["recurring_id"] = f"{desc}-{uuid.uuid4()}"
-    
-    self.save(new_entry)
-    # Refresh in-memory data to include the new transaction
-    self.data = load_data()
-    
-def get_transactions_by_date(self, date):
-    # Reload data each time to stay in sync with sheet
-    self.data = load_data()
-    date = pd.to_datetime(date).date()
-    self.data["date"] = pd.to_datetime(self.data["date"], errors='coerce')
-    return self.data[self.data["date"].dt.date == date]
-
 
 # ---------------------------
-# FinanceManager with Google Sheets
+# FinanceManager
 # ---------------------------
 
 class FinanceManager:
@@ -74,6 +50,8 @@ class FinanceManager:
 
     def save(self, new_entry):
         save_data(new_entry)
+        # Refresh after saving
+        self.data = load_data()
 
     def add_transaction(self, date, ttype, desc, amount, recurring=False):
         new_entry = {
@@ -86,19 +64,19 @@ class FinanceManager:
         }
         if recurring and ttype == "Bill":
             new_entry["recurring_id"] = f"{desc}-{uuid.uuid4()}"
-        self.data = pd.concat([self.data, pd.DataFrame([new_entry])], ignore_index=True)
         self.save(new_entry)
 
-
     def get_transactions_by_date(self, date):
-        date = pd.to_datetime(date).date()
-        self.data["date"] = pd.to_datetime(self.data["date"], errors='coerce')
-        return self.data[self.data["date"].dt.date == date]
+        # Always load fresh data
+        data = load_data()
+        data["date"] = pd.to_datetime(data["date"], errors='coerce')
+        return data[data["date"].dt.date == pd.to_datetime(date).date()]
 
     def get_monthly_total(self, year, month):
-        self.data["date"] = pd.to_datetime(self.data["date"], errors='coerce')
-        month_data = self.data[
-            (self.data["date"].dt.year == year) & (self.data["date"].dt.month == month)
+        data = load_data()
+        data["date"] = pd.to_datetime(data["date"], errors='coerce')
+        month_data = data[
+            (data["date"].dt.year == year) & (data["date"].dt.month == month)
         ]
         total = 0
         for _, row in month_data.iterrows():
@@ -106,8 +84,9 @@ class FinanceManager:
         return total
 
     def get_weekly_total(self, week_dates):
-        self.data["date"] = pd.to_datetime(self.data["date"], errors='coerce')
-        week_data = self.data[self.data["date"].dt.date.isin(week_dates)]
+        data = load_data()
+        data["date"] = pd.to_datetime(data["date"], errors='coerce')
+        week_data = data[data["date"].dt.date.isin(week_dates)]
         total = 0
         for _, row in week_data.iterrows():
             total += row["amount"] if row["type"] == "Income" else -row["amount"]
@@ -138,7 +117,6 @@ if not st.session_state.authenticated:
             else:
                 st.error("Incorrect password")
     st.stop()
-
 
 # Logout
 if st.button("Logout"):
@@ -191,7 +169,7 @@ for week in weeks:
         week_total = manager.get_weekly_total(week_dates)
         st.markdown(f"**Weekly Total:** ${week_total:.2f}")
 
-# Transaction input form (single persistent form)
+# Transaction input form
 if st.session_state.selected_day:
     st.write(f"Adding transaction for **{st.session_state.selected_day}**")
     with st.form(key="transaction_form"):
