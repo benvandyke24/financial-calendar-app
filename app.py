@@ -152,24 +152,76 @@ with col3:
 
 st.subheader(f"{calendar.month_name[st.session_state.current_month]} {st.session_state.current_year}")
 
-# Calendar layout
-weeks = calendar.Calendar(firstweekday=6).monthdatescalendar(st.session_state.current_year, st.session_state.current_month)
+# Calendar layout with borders and improved add button placement
+weeks = calendar.Calendar(firstweekday=6).monthdatescalendar(
+    st.session_state.current_year, st.session_state.current_month
+)
+
 for week in weeks:
     cols = st.columns(8)
     week_dates = []
+
     for i, day in enumerate(week):
         week_dates.append(day)
         with cols[i]:
-            st.markdown(f"### {day.day}")
             day_data = manager.get_transactions_by_date(day)
+
+            # Border container
+            st.markdown(
+                f"""
+                <div style="
+                    border: 1px solid #ccc;
+                    border-radius: 8px;
+                    padding: 6px;
+                    min-height: 100px;
+                ">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <strong>{day.day}</strong>
+                        <form action="#" method="post">
+                            <button type="button" 
+                                style="
+                                    background-color: #f0f0f0;
+                                    border: none;
+                                    border-radius: 4px;
+                                    cursor: pointer;
+                                    padding: 0 6px;
+                                "
+                                onClick="window.location.href='?select={day}'">
+                                ➕
+                            </button>
+                        </form>
+                    </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+            # Show transactions inside border
             for _, row in day_data.iterrows():
                 color = "blue" if row["type"] == "Income" else ("darkgreen" if row["type"] == "Bill" else "red")
-                st.markdown(f"<span style='color:{color}'>{row['description']} ${row['amount']:.2f}</span>", unsafe_allow_html=True)
-            if st.button("➕", key=f"select-{day}"):
+                st.markdown(
+                    f"<div style='color:{color}; margin-top: 4px;'>{row['description']} ${row['amount']:.2f}</div>",
+                    unsafe_allow_html=True
+                )
+
+            st.markdown("</div>", unsafe_allow_html=True)
+
+            # Handle button click with session state
+            if f"select-{day}" not in st.session_state:
+                st.session_state[f"select-{day}"] = False
+            if st.experimental_get_query_params().get("select") == [str(day)]:
                 st.session_state.selected_day = str(day)
+
     with cols[7]:
         week_total = manager.get_weekly_total(week_dates)
-        st.markdown(f"**Weekly Total:** ${week_total:.2f}")
+        st.markdown(
+            f"""
+            <div style="border: 1px solid #aaa; border-radius: 8px; padding: 8px; text-align: center;">
+                <strong>Weekly Total:</strong><br>
+                ${week_total:.2f}
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
 # Transaction input form
 if st.session_state.selected_day:
