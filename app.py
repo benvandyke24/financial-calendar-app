@@ -7,21 +7,19 @@ import gspread
 from gspread.exceptions import SpreadsheetNotFound
 from oauth2client.service_account import ServiceAccountCredentials
 
+HEADERS = ["date", "type", "description", "amount", "recurring_id", "recurring_active"]
+
 # ---------------------------
 # Google Sheets Setup
 # ---------------------------
-
-HEADERS = ["date", "type", "description", "amount", "recurring_id", "recurring_active"]
-
 def connect_to_google_sheet(sheet_name="Financial_Calendar_Data"):
-    """Connects to Google Sheets, creates the spreadsheet and headers if needed."""
+    """Connect to Google Sheets, create spreadsheet/headers if missing."""
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
     creds = ServiceAccountCredentials.from_json_keyfile_dict(
         st.secrets["gcp_service_account"], scope
     )
     client = gspread.authorize(creds)
 
-    # Create sheet if it doesn't exist
     try:
         spreadsheet = client.open(sheet_name)
     except SpreadsheetNotFound:
@@ -29,29 +27,24 @@ def connect_to_google_sheet(sheet_name="Financial_Calendar_Data"):
         spreadsheet.share(st.secrets["gcp_service_account"]["client_email"], perm_type="user", role="writer")
 
     sheet = spreadsheet.sheet1
-
-    # Ensure headers exist
     values = sheet.get_all_values()
-    if not values:
-        sheet.append_row(HEADERS)
-    elif values[0] != HEADERS:
+    if not values or values[0] != HEADERS:
         sheet.clear()
         sheet.append_row(HEADERS)
 
     return sheet
 
-def load_data():
-    """Loads data safely, returns empty DataFrame if no data."""
+@st.cache_data(ttl=60)
+def load_data_cached():
+    """Cached Google Sheet loader to reduce API calls."""
     sheet = connect_to_google_sheet()
     values = sheet.get_all_values()
-    
-    if len(values) <= 1:  # Only headers or empty
+    if len(values) <= 1:
         return pd.DataFrame(columns=HEADERS)
-    
+
     df = pd.DataFrame(values[1:], columns=values[0])
-    
-    # Convert amount to float
     df["amount"] = pd.to_numeric(df["amount"], errors="coerce").fillna(0.0)
+    df["date"] = pd.to_datetime(df["date"], errors="coerce")
     return df
 
 def save_data(new_entry):
@@ -65,18 +58,14 @@ def save_data(new_entry):
         new_entry["recurring_id"],
         new_entry["recurring_active"]
     ])
+    load_data_cached.clear()  # Clear cache after writing
 
 # ---------------------------
 # FinanceManager
 # ---------------------------
-
 class FinanceManager:
     def __init__(self):
-        self.data = load_data()
-
-    def save(self, new_entry):
-        save_data(new_entry)
-        self.data = load_data()
+        self.data = load_data_cached()
 
     def add_transaction(self, date, ttype, desc, amount, recurring=False):
         new_entry = {
@@ -84,40 +73,32 @@ class FinanceManager:
             "type": ttype,
             "description": desc,
             "amount": float(amount),
-            "recurring_id": None,
+            "recurring_id": f"{desc}-{uuid.uuid4()}" if recurring and ttype == "Bill" else None,
             "recurring_active": True
         }
-        if recurring and ttype == "Bill":
-            new_entry["recurring_id"] = f"{desc}-{uuid.uuid4()}"
-        self.save(new_entry)
+        save_data(new_entry)
+        self.data = load_data_cached()
 
     def get_transactions_by_date(self, date):
-        data = load_data()
-        if data.empty:
-            return data
-        data["date"] = pd.to_datetime(data["date"], errors='coerce')
-        return data[data["date"].dt.date == pd.to_datetime(date).date()]
+        if self.data.empty:
+            return self.data
+        return self.data[self.data["date"].dt.date == pd.to_datetime(date).date()]
 
     def get_monthly_total(self, year, month):
-        data = load_data()
-        if data.empty:
+        if self.data.empty:
             return 0
-        data["date"] = pd.to_datetime(data["date"], errors='coerce')
-        month_data = data[(data["date"].dt.year == year) & (data["date"].dt.month == month)]
-        return sum(row["amount"] if row["type"] == "Income" else -row["amount"] for _, row in month_data.iterrows())
+        month_data = self.data[(self.data["date"].dt.year == year) & (self.data["date"].dt.month == month)]
+        return month_data.apply(lambda row: row["amount"] if row["type"] == "Income" else -row["amount"], axis=1).sum()
 
     def get_weekly_total(self, week_dates):
-        data = load_data()
-        if data.empty:
+        if self.data.empty:
             return 0
-        data["date"] = pd.to_datetime(data["date"], errors='coerce')
-        week_data = data[data["date"].dt.date.isin(week_dates)]
-        return sum(row["amount"] if row["type"] == "Income" else -row["amount"] for _, row in week_data.iterrows())
+        week_data = self.data[self.data["date"].dt.date.isin(week_dates)]
+        return week_data.apply(lambda row: row["amount"] if row["type"] == "Income" else -row["amount"], axis=1).sum()
 
 # ---------------------------
 # Streamlit App
 # ---------------------------
-
 st.set_page_config(layout="wide")
 st.title("📅 Financial Calendar")
 
@@ -171,7 +152,7 @@ with col3:
 
 st.subheader(f"{calendar.month_name[st.session_state.current_month]} {st.session_state.current_year}")
 
-# Calendar layout with weekly total column
+# Calendar layout
 weeks = calendar.Calendar(firstweekday=6).monthdatescalendar(st.session_state.current_year, st.session_state.current_month)
 for week in weeks:
     cols = st.columns(8)
