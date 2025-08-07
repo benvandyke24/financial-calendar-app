@@ -191,17 +191,17 @@ class FinanceManager:
         week_data = self.data[self.data["date"].dt.date.isin(week_dates)]
         return week_data.apply(lambda row: row["amount"] if row["type"] == "Income" else -row["amount"], axis=1).sum()
 
-    # def get_transactions_by_date(date_str):
-    #     # Returns a list of transactions for the given date_str (e.g., "2025-08-01")
-    #     return [t for t in all_transactions if t['Date'] == date_str]
-    
-    # def add_transaction_callback(date_str):
-    #     st.session_state['selected_date'] = date_str
-    #     st.session_state['show_form'] = True
-    
-    # def get_weekly_total(start_date, end_date):
-    #     total = sum(float(t['Amount']) for t in all_transactions if start_date <= t['Date'] <= end_date)
-    #     return total
+def get_transactions_by_date(date_str):
+    # Returns a list of transactions for the given date_str (e.g., "2025-08-01")
+    return [t for t in all_transactions if t['Date'] == date_str]
+
+def add_transaction_callback(date_str):
+    st.session_state['selected_date'] = date_str
+    st.session_state['show_form'] = True
+
+def get_weekly_total(start_date, end_date):
+    total = sum(float(t['Amount']) for t in all_transactions if start_date <= t['Date'] <= end_date)
+    return total
 
 
 # ---------------------------
