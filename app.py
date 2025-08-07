@@ -6,7 +6,7 @@ import uuid
 import gspread
 from gspread.exceptions import SpreadsheetNotFound
 from oauth2client.service_account import ServiceAccountCredentials
-from finance_manager import FinanceManager  # Ensure your FinanceManager is in a file named finance_manager.py
+# from finance_manager import FinanceManager  # Ensure your FinanceManager is in a file named finance_manager.py
 
 
 
